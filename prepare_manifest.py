@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Build a NeMo ASR manifest (jsonl) for fine-tuning finetune_parakeet.py.
+"""Build NeMo ASR manifest(s) (jsonl) for fine-tuning finetune_parakeet.py.
 
 Each output line is: {"audio_filepath": "...", "duration": 12.3, "text": "..."}
 
-Two input layouts are supported:
+Three input layouts are supported:
 
 1. --csv path/to/data.csv with two columns "audio_filepath,text" (a header
    row is optional; audio paths may be relative to the CSV's directory).
@@ -11,9 +11,20 @@ Two input layouts are supported:
 2. --audio-dir path/to/wavs, where each "name.wav" has a matching "name.txt"
    sibling file containing its transcript.
 
+3. --dataset-json path/to/dataset.json - a JSON array of objects with
+   "clip_path" and "human_labeled" keys (this project's labeled dataset
+   format; paths may be relative to the JSON file's directory).
+
+By default all entries go to one manifest (--out). Pass --val-split to
+instead hold out a fraction for validation and write two manifests
+(--train-out / --val-out) - finetune_parakeet.py needs both a train and a
+validation manifest.
+
 Usage:
     python prepare_manifest.py --csv data/train.csv --out data/train_manifest.json
     python prepare_manifest.py --audio-dir data/train_wavs --out data/train_manifest.json
+    python prepare_manifest.py --dataset-json data/dataset.json \
+        --val-split 0.1 --train-out data/train_manifest.json --val-out data/val_manifest.json
 """
 
 from __future__ import annotations
@@ -21,6 +32,7 @@ from __future__ import annotations
 import argparse
 import csv
 import json
+import random
 import wave
 from pathlib import Path
 
@@ -65,21 +77,27 @@ def entries_from_audio_dir(audio_dir: Path) -> list[dict]:
     return entries
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--csv", type=Path, help="CSV file with audio_filepath,text columns")
-    source.add_argument("--audio-dir", type=Path, help="Directory of name.wav + name.txt pairs")
-    parser.add_argument("--out", type=Path, required=True, help="Output manifest path (jsonl)")
-    args = parser.parse_args()
+def entries_from_dataset_json(dataset_json_path: Path) -> list[dict]:
+    with dataset_json_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
 
-    entries = entries_from_csv(args.csv) if args.csv else entries_from_audio_dir(args.audio_dir)
-    if not entries:
-        raise SystemExit("No entries found - check the input path and layout.")
+    entries = []
+    for item in data:
+        audio_filepath = item.get("clip_path")
+        text = (item.get("human_labeled") or "").strip()
+        if not audio_filepath or not text:
+            continue
+        audio_path = Path(audio_filepath)
+        if not audio_path.is_absolute():
+            audio_path = (dataset_json_path.parent / audio_path).resolve()
+        entries.append({"audio_filepath": audio_path, "text": text})
+    return entries
 
-    args.out.parent.mkdir(parents=True, exist_ok=True)
+
+def write_manifest(entries: list[dict], out_path: Path) -> int:
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     written = 0
-    with args.out.open("w", encoding="utf-8") as out_file:
+    with out_path.open("w", encoding="utf-8") as out_file:
         for entry in entries:
             audio_path: Path = entry["audio_filepath"]
             if not audio_path.is_file():
@@ -91,9 +109,51 @@ def main() -> int:
                 + "\n"
             )
             written += 1
+    print(f"Wrote {written} entries to {out_path}")
+    return written
 
-    print(f"Wrote {written} entries to {args.out}")
-    return 0 if written else 1
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--csv", type=Path, help="CSV file with audio_filepath,text columns")
+    source.add_argument("--audio-dir", type=Path, help="Directory of name.wav + name.txt pairs")
+    source.add_argument("--dataset-json", type=Path, help="dataset.json with clip_path/human_labeled entries")
+
+    parser.add_argument("--out", type=Path, help="Output manifest path (jsonl) - single-manifest mode")
+    parser.add_argument(
+        "--val-split", type=float, default=None, help="Fraction held out for validation, e.g. 0.1 - splits into two manifests instead of one"
+    )
+    parser.add_argument("--train-out", type=Path, help="Train manifest output path (used with --val-split)")
+    parser.add_argument("--val-out", type=Path, help="Validation manifest output path (used with --val-split)")
+    parser.add_argument("--seed", type=int, default=0, help="Shuffle seed before splitting (with --val-split)")
+    args = parser.parse_args()
+
+    if args.val_split is not None:
+        if not args.train_out or not args.val_out:
+            parser.error("--val-split requires --train-out and --val-out")
+    elif not args.out:
+        parser.error("--out is required unless --val-split is set")
+
+    if args.csv:
+        entries = entries_from_csv(args.csv)
+    elif args.audio_dir:
+        entries = entries_from_audio_dir(args.audio_dir)
+    else:
+        entries = entries_from_dataset_json(args.dataset_json)
+
+    if not entries:
+        raise SystemExit("No entries found - check the input path and layout.")
+
+    if args.val_split is None:
+        written = write_manifest(entries, args.out)
+        return 0 if written else 1
+
+    random.Random(args.seed).shuffle(entries)
+    split_at = round(len(entries) * (1 - args.val_split))
+    train_written = write_manifest(entries[:split_at], args.train_out)
+    val_written = write_manifest(entries[split_at:], args.val_out)
+    return 0 if (train_written and val_written) else 1
 
 
 if __name__ == "__main__":

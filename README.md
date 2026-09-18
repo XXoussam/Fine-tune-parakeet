@@ -11,15 +11,18 @@ Training needs a CUDA GPU that this project doesn't assume you have locally, so 
 | `nemo.ipynb` | Colab (GPU runtime) | End-to-end notebook: install deps, verify the environment, run the AN4 smoke test, fine-tune parakeet. |
 | `finetune_parakeet.py` | GPU machine (Colab or a VM) | Standalone fine-tuning entrypoint (Hydra/NeMo), adapted from NVIDIA's own `examples/asr/speech_to_text_finetune.py`, pinned to `parakeet-tdt-0.6b-v3`. After training it dumps `validation_predictions.jsonl` (raw reference/hypothesis text) for local evaluation. |
 | `conf/parakeet_finetune.yaml` | GPU machine | Hyperparameters for `finetune_parakeet.py` (small LR, since this is fine-tuning a converged model, not training from scratch). |
-| `prepare_manifest.py` | Local | Builds a NeMo manifest (`audio_filepath`/`duration`/`text` jsonl) from a CSV or a directory of `name.wav` + `name.txt` pairs. |
-| `build_manifest.py` | Local | Same idea, wired to this project's actual labeled dataset format (`dataset.json` with `clip_path`/`human_labeled`). |
+| `prepare_manifest.py` | Local | Builds NeMo manifest(s) (`audio_filepath`/`duration`/`text` jsonl) from a CSV, a directory of `name.wav` + `name.txt` pairs, or this project's `dataset.json` (`clip_path`/`human_labeled`). `--val-split` splits into train/val manifests in one pass. |
 | `an4_smoke_test_data.py` | GPU machine | Downloads NVIDIA's AN4 tutorial dataset and builds train/test manifests from it, headless (no Jupyter). Use this for a first pipeline smoke test on a VM before using real data. |
 | `evaluate.py` | Local (no GPU/NeMo needed) | Reads `validation_predictions.jsonl`, computes WER itself, writes a CSV plus WER-distribution / WER-vs-duration plots. |
 | `try_deberta-v3-base.py` | Local | Unrelated smoke test loading `microsoft/deberta-v3-base` - not part of the fine-tuning pipeline. |
 
 ## Workflow
 
-1. **Prepare data locally.** Build a NeMo manifest with `prepare_manifest.py` (generic CSV/wav+txt input) or `build_manifest.py` (this project's `dataset.json`).
+1. **Prepare data locally.** Build train/val manifests with `prepare_manifest.py`, e.g.:
+   ```
+   python prepare_manifest.py --dataset-json dataset.json --val-split 0.1 \
+       --train-out train_manifest.json --val-out val_manifest.json
+   ```
 2. **Train on a GPU.**
    - Easiest: open `nemo.ipynb` in Colab and run it top to bottom.
    - Or on a GPU VM (see the VM quickstart below).
@@ -74,5 +77,5 @@ python finetune_parakeet.py \
 
 Step 7 is a **pipeline smoke test**, not real training — `max_epochs=1` and a small batch size just prove everything runs end-to-end on this GPU without OOMing. Once it completes cleanly:
 
-- For a real fine-tune, swap in your actual manifest (`build_manifest.py` against `dataset.json`) and raise `trainer.max_epochs` (typically 5-20 for a converged 0.6B model, not the ~200 appropriate for training from scratch) and `batch_size` as far as the GPU's VRAM allows.
+- For a real fine-tune, swap in your actual manifests (`prepare_manifest.py --dataset-json dataset.json --val-split 0.1 ...`) and raise `trainer.max_epochs` (typically 5-20 for a converged 0.6B model, not the ~200 appropriate for training from scratch) and `batch_size` as far as the GPU's VRAM allows.
 - Copy `validation_predictions.jsonl` back to your local machine and run `evaluate.py` on it (see Workflow above).
