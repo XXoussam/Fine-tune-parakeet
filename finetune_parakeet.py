@@ -1,14 +1,24 @@
 #!/usr/bin/env python3
 """Fine-tune NVIDIA Parakeet (parakeet-tdt-0.6b-v3) with NeMo.
 
-This is meant to run on a Linux GPU VM (CUDA), not on this local machine -
-NeMo's ASR training stack needs a CUDA-capable PyTorch install. See
-requirements-finetune.txt for the packages to install on the VM first.
+This is meant to run on a machine with a CUDA GPU (a VM, or Colab) - NOT on
+a local machine with no GPU. NeMo's ASR training stack needs a CUDA-capable
+PyTorch install. See requirements.txt for the packages to install first.
 
 Adapted from NVIDIA's own examples/asr/speech_to_text_finetune.py in the
 NVIDIA-NeMo/NeMo repo, pinned to the parakeet-tdt-0.6b-v3 checkpoint and
 with defaults from conf/parakeet_finetune.yaml tuned for fine-tuning
 (small LR, single GPU) rather than training from scratch.
+
+Moving data to/from a GPU VM (manual - no assumptions about your VM's
+host/auth baked in here):
+    # local -> VM: copy only what training needs (manifests + audio + this repo)
+    scp -r train_manifest.json val_manifest.json audio/ user@vm-host:~/data/
+    git clone https://github.com/XXoussam/Fine-tune-parakeet.git  # on the VM
+
+    # VM -> local: copy back only the small results, not the model/checkpoints
+    scp user@vm-host:~/nemo_experiments/**/validation_predictions.jsonl .
+    # then run evaluate.py locally - no NeMo/GPU needed for that step
 
 1. Prepare NeMo manifests (jsonl with audio_filepath/duration/text) for your
    train/validation data. Use prepare_manifest.py if you don't have these yet.
@@ -18,13 +28,16 @@ with defaults from conf/parakeet_finetune.yaml tuned for fine-tuning
        model.validation_ds.manifest_filepath=/data/val_manifest.json
 3. Override any other config value the same way, e.g.:
        trainer.devices=2 model.train_ds.batch_size=8 trainer.max_epochs=20
-4. The fine-tuned checkpoint (.nemo) is written under
-   ./nemo_experiments/Parakeet_TDT_Finetuning/.../checkpoints/
+4. The fine-tuned checkpoint (.nemo) and validation_predictions.jsonl (raw
+   reference/hypothesis pairs, for evaluate.py) are written under
+   ./nemo_experiments/Parakeet_TDT_Finetuning/.../
 """
 
 from __future__ import annotations
 
+import json
 import time
+from pathlib import Path
 from typing import Union
 
 import lightning.pytorch as pl
@@ -97,6 +110,51 @@ def update_tokenizer(asr_model: ASRModel, tokenizer_dir: Union[str, DictConfig],
     return asr_model
 
 
+def dump_validation_predictions(asr_model: ASRModel, cfg: DictConfig, log_dir: Union[str, Path, None]) -> None:
+    """Transcribe the validation manifest and write raw (reference, hypothesis) pairs.
+
+    Deliberately does NOT compute WER here - NeMo's internal metrics API has moved
+    around across versions. evaluate.py computes WER itself from this raw text, so
+    it has no NeMo dependency and can run on a machine with no GPU.
+    """
+    manifest_path = cfg.model.validation_ds.manifest_filepath
+    if manifest_path is None:
+        return
+    if isinstance(manifest_path, (list, tuple)):
+        manifest_path = manifest_path[0]
+
+    entries = []
+    with open(manifest_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                entries.append(json.loads(line))
+
+    audio_filepaths = [entry["audio_filepath"] for entry in entries]
+    hypotheses = asr_model.transcribe(audio_filepaths, batch_size=cfg.model.validation_ds.batch_size)
+    hyp_texts = [hyp.text if hasattr(hyp, "text") else str(hyp) for hyp in hypotheses]
+
+    out_dir = Path(log_dir) if log_dir else Path.cwd()
+    out_path = out_dir / "validation_predictions.jsonl"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w", encoding="utf-8") as out_file:
+        for entry, hyp_text in zip(entries, hyp_texts):
+            out_file.write(
+                json.dumps(
+                    {
+                        "audio_filepath": entry["audio_filepath"],
+                        "duration": entry.get("duration"),
+                        "reference": entry.get("text", ""),
+                        "hypothesis": hyp_text,
+                    },
+                    ensure_ascii=False,
+                )
+                + "\n"
+            )
+
+    logging.info(f"Wrote {len(entries)} validation predictions to {out_path}")
+
+
 def setup_dataloaders(asr_model: ASRModel, cfg: DictConfig) -> ASRModel:
     cfg = model_utils.convert_model_config_to_dict_config(cfg)
     asr_model.setup_training_data(cfg.model.train_ds)
@@ -111,7 +169,7 @@ def main(cfg: DictConfig) -> None:
     logging.info(f"Hydra config:\n{OmegaConf.to_yaml(cfg)}")
 
     trainer = pl.Trainer(**resolve_trainer_cfg(cfg.trainer))
-    exp_manager(trainer, cfg.get("exp_manager", None))
+    log_dir = exp_manager(trainer, cfg.get("exp_manager", None))
 
     asr_model = get_base_model(trainer, cfg)
     asr_model = check_vocabulary(asr_model, cfg)
@@ -123,6 +181,9 @@ def main(cfg: DictConfig) -> None:
         asr_model.spec_augment = ASRModel.from_config_dict(cfg.model.spec_augment)
 
     trainer.fit(asr_model)
+
+    if is_global_rank_zero():
+        dump_validation_predictions(asr_model, cfg, log_dir)
 
 
 if __name__ == "__main__":
