@@ -2,8 +2,9 @@
 """Download NVIDIA's AN4 tutorial dataset and build NeMo manifests.
 
 Same data nemo.ipynb uses on Colab, refactored into a standalone script so
-a headless GPU VM (no Jupyter) can build it too, for a first pipeline
-smoke test before pointing finetune_parakeet.py at the real dataset.
+a headless GPU VM (no Jupyter) can build it too. Used for both a quick
+pipeline smoke test and a full AN4 training dry run, before pointing
+finetune_parakeet.py at the real dataset.
 
 Needs `ffmpeg` on PATH (sph -> wav conversion): `apt-get install -y ffmpeg`
 
