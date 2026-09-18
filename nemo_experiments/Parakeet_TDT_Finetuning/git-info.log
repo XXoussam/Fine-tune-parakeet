@@ -1,0 +1,97 @@
+commit hash: 176f91c0078c3e320e9541002b080056be8c3c26
+warning: in the working copy of 'nemo.ipynb', LF will be replaced by CRLF the next time Git touches it
+diff --git a/.gitignore b/.gitignore
+index f0da715..6fea54c 100644
+--- a/.gitignore
++++ b/.gitignore
+@@ -1,4 +1,4 @@
+-nemo-venv
++.nemo-env
+ an4
+ an4_converted
+ an4_sphere.tar.gz
+\ No newline at end of file
+diff --git a/nemo.ipynb b/nemo.ipynb
+index 944645e..499daae 100644
+--- a/nemo.ipynb
++++ b/nemo.ipynb
+@@ -74,7 +74,11 @@
+    "cell_type": "markdown",
+    "id": "bec09e03",
+    "metadata": {},
+-   "source": "## 4. Download & prepare tutorial data (AN4)\n\nThis is NVIDIA's standard AN4 smoke-test dataset — it confirms the download/convert/manifest pipeline works end-to-end on this runtime before pointing it at the real dataset. For the actual project data, use `prepare_manifest.py --dataset-json dataset.json --val-split ...` instead of this section."
++   "source": [
++    "## 4. Download & prepare tutorial data (AN4)\n",
++    "\n",
++    "This is NVIDIA's standard AN4 smoke-test dataset — it confirms the download/convert/manifest pipeline works end-to-end on this runtime before pointing it at the real dataset. For the actual project data, use `prepare_manifest.py --dataset-json dataset.json --val-split ...` instead of this section."
++   ]
+   },
+   {
+    "cell_type": "code",
+@@ -325,7 +329,17 @@
+    "cell_type": "markdown",
+    "id": "01e3e2d1",
+    "metadata": {},
+-   "source": "## 7. Full fine-tune (still on AN4 data)\n\nSame data and the same `finetune_parakeet.py`, just a real (multi-epoch) run instead of the 1-epoch smoke test above.\n\n`batch_size=8` (not the yaml's default 16) and `max_epochs=5` (not 50): the earlier attempt at `batch_size=16` peaked GPU RAM at ~14.5/15GB on a T4 and the run died (checkpointing only happens once per completed epoch, so a mid-epoch OOM restart also loses that epoch's progress - `resume_if_exists` had nothing to resume from). Raise `batch_size` back up incrementally if the GPU has headroom (check the Colab Resources panel's GPU RAM graph while it runs), and raise `max_epochs` once it survives cleanly at this size.\n\nWrites to a separate `exp_dir` (`checkpoints_full`, not `checkpoints`) so it starts fresh from the pretrained checkpoint instead of resuming the smoke test's 1-epoch run.\n\nAN4 is small and narrow-vocabulary, so a great WER here isn't proof the model generalizes — this run validates that a multi-epoch schedule (data loading, checkpointing, validation loop) completes cleanly. The real signal comes once you swap in the real dataset (see Next steps)."
++   "source": [
++    "## 7. Full fine-tune (still on AN4 data)\n",
++    "\n",
++    "Same data and the same `finetune_parakeet.py`, just a real (multi-epoch) run instead of the 1-epoch smoke test above.\n",
++    "\n",
++    "`batch_size=8` (not the yaml's default 16) and `max_epochs=5` (not 50): the earlier attempt at `batch_size=16` peaked GPU RAM at ~14.5/15GB on a T4 and the run died (checkpointing only happens once per completed epoch, so a mid-epoch OOM restart also loses that epoch's progress - `resume_if_exists` had nothing to resume from). Raise `batch_size` back up incrementally if the GPU has headroom (check the Colab Resources panel's GPU RAM graph while it runs), and raise `max_epochs` once it survives cleanly at this size.\n",
++    "\n",
++    "Writes to a separate `exp_dir` (`checkpoints_full`, not `checkpoints`) so it starts fresh from the pretrained checkpoint instead of resuming the smoke test's 1-epoch run.\n",
++    "\n",
++    "AN4 is small and narrow-vocabulary, so a great WER here isn't proof the model generalizes — this run validates that a multi-epoch schedule (data loading, checkpointing, validation loop) completes cleanly. The real signal comes once you swap in the real dataset (see Next steps)."
++   ]
+   },
+   {
+    "cell_type": "code",
+@@ -333,18 +347,31 @@
+    "id": "645fe7f9",
+    "metadata": {},
+    "outputs": [],
+-   "source": "!python finetune_parakeet.py \\\n    model.train_ds.manifest_filepath=\"$DATA_DIR/an4_converted/train_manifest.json\" \\\n    model.validation_ds.manifest_filepath=\"$DATA_DIR/an4_converted/test_manifest.json\" \\\n    model.train_ds.batch_size=8 \\\n    model.validation_ds.batch_size=8 \\\n    trainer.max_epochs=5 \\\n    exp_manager.exp_dir=\"$DATA_DIR/checkpoints_full\""
++   "source": [
++    "!python finetune_parakeet.py \\\n",
++    "    model.train_ds.manifest_filepath=\"$DATA_DIR/an4_converted/train_manifest.json\" \\\n",
++    "    model.validation_ds.manifest_filepath=\"$DATA_DIR/an4_converted/test_manifest.json\" \\\n",
++    "    model.train_ds.batch_size=8 \\\n",
++    "    model.validation_ds.batch_size=8 \\\n",
++    "    trainer.max_epochs=5 \\\n",
++    "    exp_manager.exp_dir=\"$DATA_DIR/checkpoints_full\""
++   ]
+   },
+   {
+    "cell_type": "markdown",
+    "id": "6a3d77fa",
+    "metadata": {},
+-   "source": "## Next steps\n\n- Swap the manifests for the real dataset: `python prepare_manifest.py --dataset-json dataset.json --val-split 0.1 --train-out train_manifest.json --val-out val_manifest.json`, then re-run `finetune_parakeet.py` with `model.train_ds.manifest_filepath=...` pointed at it.\n- Confirmed working on nemo 3.0.0: config parses, the pretrained checkpoint restores, the tokenizer is reused, data loads, and training starts cleanly (verified end-to-end on Colab, interrupted intentionally after the first steps - no need to let all 50 AN4 epochs finish, this was only checking the pipeline runs)."
++   "source": [
++    "## Next steps\n",
++    "\n",
++    "- Swap the manifests for the real dataset: `python prepare_manifest.py --dataset-json dataset.json --val-split 0.1 --train-out train_manifest.json --val-out val_manifest.json`, then re-run `finetune_parakeet.py` with `model.train_ds.manifest_filepath=...` pointed at it.\n",
++    "- Confirmed working on nemo 3.0.0: config parses, the pretrained checkpoint restores, the tokenizer is reused, data loads, and training starts cleanly (verified end-to-end on Colab, interrupted intentionally after the first steps - no need to let all 50 AN4 epochs finish, this was only checking the pipeline runs)."
++   ]
+   }
+  ],
+  "metadata": {
+   "kernelspec": {
+-   "display_name": "nemo-venv (3.12.1)",
++   "display_name": "base",
+    "language": "python",
+    "name": "python3"
+   },
+@@ -358,9 +385,9 @@
+    "name": "python",
+    "nbconvert_exporter": "python",
+    "pygments_lexer": "ipython3",
+-   "version": "3.12.1"
++   "version": "3.11.5"
+   }
+  },
+  "nbformat": 4,
+  "nbformat_minor": 5
+-}
+\ No newline at end of file
++}

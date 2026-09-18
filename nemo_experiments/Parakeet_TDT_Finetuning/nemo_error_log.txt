@@ -1,0 +1,48 @@
+[NeMo W 2026-09-18 16:31:16 nemo_logging:364] C:\Users\osaoudi\Desktop\EASPORTS\VoiceComAnalysis\FineTune\.nemo-env\Lib\site-packages\hydra\_internal\hydra.py:119: UserWarning: Future Hydra versions will no longer change working directory at job runtime by default.
+    See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ for more information.
+      ret = run_job(
+    
+[NeMo W 2026-09-18 16:31:16 exp_manager:1154] No version folders would be created under the log folder as 'resume_if_exists' is enabled.
+[NeMo W 2026-09-18 16:31:16 exp_manager:999] There were no checkpoints found in checkpoint_dir or no checkpoint folder at checkpoint_dir :nemo_experiments\Parakeet_TDT_Finetuning\checkpoints. Training from scratch.
+[NeMo W 2026-09-18 16:31:24 modelPT:175] If you intend to do training or fine-tuning, please call the ModelPT.setup_training_data() method and provide a valid configuration file to setup the train data loader.
+    Train config : 
+    use_lhotse: true
+    skip_missing_manifest_entries: true
+    input_cfg: null
+    tarred_audio_filepaths: null
+    manifest_filepath: null
+    sample_rate: 16000
+    shuffle: true
+    num_workers: 2
+    pin_memory: true
+    max_duration: 10.0
+    min_duration: 1.0
+    text_field: answer
+    batch_duration: null
+    max_tps: null
+    use_bucketing: true
+    bucket_duration_bins: null
+    bucket_batch_size: null
+    num_buckets: 30
+    bucket_buffer_size: 20000
+    shuffle_buffer_size: 10000
+    
+[NeMo W 2026-09-18 16:31:24 modelPT:182] If you intend to do validation, please call the ModelPT.setup_validation_data() or ModelPT.setup_multiple_validation_data() method and provide a valid configuration file to setup the validation data loader(s). 
+    Validation config : 
+    use_lhotse: true
+    manifest_filepath: null
+    sample_rate: 16000
+    batch_size: 16
+    shuffle: false
+    max_duration: 40.0
+    min_duration: 0.1
+    num_workers: 2
+    pin_memory: true
+    text_field: answer
+    
+[NeMo W 2026-09-18 16:31:28 label_looping_base:143] No conditional node support for Cuda.
+    Cuda graphs with while loops are disabled, decoding speed will be slower
+    Reason: CUDA is not available
+[NeMo W 2026-09-18 16:31:28 label_looping_base:143] No conditional node support for Cuda.
+    Cuda graphs with while loops are disabled, decoding speed will be slower
+    Reason: CUDA is not available

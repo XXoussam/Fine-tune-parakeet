@@ -1,0 +1,1 @@
+finetune_parakeet.py model.train_ds.manifest_filepath=/data/train_manifest.json model.validation_ds.manifest_filepath=/data/val_manifest.json
