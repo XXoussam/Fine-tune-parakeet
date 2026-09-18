@@ -1,0 +1,19 @@
+# download_and_try_parakeet.py uses only the Python standard library.
+# It installs and invokes NVIDIA NeMo-Speech.cpp as a local executable.
+#
+# System requirements for download_and_try_parakeet.py:
+# - Python 3.10 or newer
+# - curl
+# - Linux, macOS, or Windows (PowerShell) for automatic NeMo-Speech.cpp installation
+
+# --- Fine-tuning (finetune_parakeet.py, prepare_manifest.py) -----------------
+# Needs a CUDA GPU - install these on the Linux GPU VM, not on this local machine.
+#
+# Install PyTorch matching the VM's CUDA version FIRST, from
+# https://pytorch.org/get-started/locally/ (nemo_toolkit does not pin one for
+# you), then: pip install -r requirements.txt
+nemo_toolkit[asr]
+lightning
+hydra-core
+omegaconf
+soundfile
