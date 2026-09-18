@@ -13,6 +13,7 @@ Training needs a CUDA GPU that this project doesn't assume you have locally, so 
 | `conf/parakeet_finetune.yaml` | GPU machine | Hyperparameters for `finetune_parakeet.py` (small LR, since this is fine-tuning a converged model, not training from scratch). |
 | `prepare_manifest.py` | Local | Builds a NeMo manifest (`audio_filepath`/`duration`/`text` jsonl) from a CSV or a directory of `name.wav` + `name.txt` pairs. |
 | `build_manifest.py` | Local | Same idea, wired to this project's actual labeled dataset format (`dataset.json` with `clip_path`/`human_labeled`). |
+| `an4_smoke_test_data.py` | GPU machine | Downloads NVIDIA's AN4 tutorial dataset and builds train/test manifests from it, headless (no Jupyter). Use this for a first pipeline smoke test on a VM before using real data. |
 | `evaluate.py` | Local (no GPU/NeMo needed) | Reads `validation_predictions.jsonl`, computes WER itself, writes a CSV plus WER-distribution / WER-vs-duration plots. |
 | `try_parakeet.py` | Local | Quick smoke test transcribing a sample WAV via the Hugging Face `transformers` pipeline. |
 | `try_deberta-v3-base.py` | Local | Unrelated smoke test loading `microsoft/deberta-v3-base`. |
@@ -22,13 +23,7 @@ Training needs a CUDA GPU that this project doesn't assume you have locally, so 
 1. **Prepare data locally.** Build a NeMo manifest with `prepare_manifest.py` (generic CSV/wav+txt input) or `build_manifest.py` (this project's `dataset.json`).
 2. **Train on a GPU.**
    - Easiest: open `nemo.ipynb` in Colab and run it top to bottom.
-   - Or on a GPU VM: `pip install -r requirements.txt`, then
-     ```
-     python finetune_parakeet.py \
-         model.train_ds.manifest_filepath=/path/train_manifest.json \
-         model.validation_ds.manifest_filepath=/path/val_manifest.json
-     ```
-     Override any other config value the same way, e.g. `trainer.max_epochs=10 model.train_ds.batch_size=8`.
+   - Or on a GPU VM (see the VM quickstart below).
 3. **Copy back one small file.** Training writes `validation_predictions.jsonl` under `nemo_experiments/Parakeet_TDT_Finetuning/.../` — copy just that file to your local machine (e.g. `scp`). Nothing else needs to cross the wire.
 4. **Evaluate locally.**
    ```
@@ -40,8 +35,45 @@ Training needs a CUDA GPU that this project doesn't assume you have locally, so 
 
 Local (data prep + evaluation only): no ML dependencies needed beyond what's in `requirements.txt`'s comments (`soundfile`, `matplotlib` for `evaluate.py`'s plots).
 
-GPU machine (training):
-```
+GPU machine (training): see the VM quickstart below.
+
+## VM quickstart (test run, using the AN4 example data)
+
+On a fresh Linux GPU VM:
+
+```bash
+# 1. System packages (sph -> wav conversion needs ffmpeg)
+sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+
+# 2. Get the repo
+git clone https://github.com/XXoussam/Fine-tune-parakeet.git
+cd Fine-tune-parakeet
+
+# 3. Python env
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 4. PyTorch matching this VM's CUDA version - check first, then install
+#    the matching command from https://pytorch.org/get-started/locally/
+nvidia-smi   # look at the CUDA version in the top-right
+pip install torch --index-url https://download.pytorch.org/whl/cu124   # example only - match your CUDA version
+
+# 5. Everything else (nemo_toolkit, lightning, hydra-core, ...)
 pip install -r requirements.txt
+
+# 6. Example data for a first test run (AN4 - same data nemo.ipynb uses)
+python an4_smoke_test_data.py --out-dir an4_data
+
+# 7. Fine-tune parakeet-tdt-0.6b-v3 against it
+python finetune_parakeet.py \
+    model.train_ds.manifest_filepath=an4_data/an4_converted/train_manifest.json \
+    model.validation_ds.manifest_filepath=an4_data/an4_converted/test_manifest.json \
+    model.train_ds.batch_size=4 \
+    model.validation_ds.batch_size=4 \
+    trainer.max_epochs=1
 ```
-Install PyTorch matching the machine's CUDA version *first* — `nemo_toolkit` doesn't pin one for you. See [pytorch.org/get-started/locally](https://pytorch.org/get-started/locally/).
+
+Step 7 is a **pipeline smoke test**, not real training — `max_epochs=1` and a small batch size just prove everything runs end-to-end on this GPU without OOMing. Once it completes cleanly:
+
+- For a real fine-tune, swap in your actual manifest (`build_manifest.py` against `dataset.json`) and raise `trainer.max_epochs` (typically 5-20 for a converged 0.6B model, not the ~200 appropriate for training from scratch) and `batch_size` as far as the GPU's VRAM allows.
+- Copy `validation_predictions.jsonl` back to your local machine and run `evaluate.py` on it (see Workflow above).
