@@ -15,8 +15,7 @@ Training needs a CUDA GPU that this project doesn't assume you have locally, so 
 | `build_manifest.py` | Local | Same idea, wired to this project's actual labeled dataset format (`dataset.json` with `clip_path`/`human_labeled`). |
 | `an4_smoke_test_data.py` | GPU machine | Downloads NVIDIA's AN4 tutorial dataset and builds train/test manifests from it, headless (no Jupyter). Use this for a first pipeline smoke test on a VM before using real data. |
 | `evaluate.py` | Local (no GPU/NeMo needed) | Reads `validation_predictions.jsonl`, computes WER itself, writes a CSV plus WER-distribution / WER-vs-duration plots. |
-| `try_parakeet.py` | Local | Quick smoke test transcribing a sample WAV via the Hugging Face `transformers` pipeline. |
-| `try_deberta-v3-base.py` | Local | Unrelated smoke test loading `microsoft/deberta-v3-base`. |
+| `try_deberta-v3-base.py` | Local | Unrelated smoke test loading `microsoft/deberta-v3-base` - not part of the fine-tuning pipeline. |
 
 ## Workflow
 

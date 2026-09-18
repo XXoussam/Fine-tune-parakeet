@@ -1,12 +1,4 @@
-# download_and_try_parakeet.py uses only the Python standard library.
-# It installs and invokes NVIDIA NeMo-Speech.cpp as a local executable.
-#
-# System requirements for download_and_try_parakeet.py:
-# - Python 3.10 or newer
-# - curl
-# - Linux, macOS, or Windows (PowerShell) for automatic NeMo-Speech.cpp installation
-
-# --- Fine-tuning (finetune_parakeet.py, prepare_manifest.py) -----------------
+# --- Fine-tuning (finetune_parakeet.py, an4_smoke_test_data.py, build_manifest.py / prepare_manifest.py) ---
 # Needs a CUDA GPU - install these on the Linux GPU VM, not on this local machine.
 #
 # Install PyTorch matching the VM's CUDA version FIRST, from
@@ -17,3 +9,14 @@ lightning
 hydra-core
 omegaconf
 soundfile
+
+# --- Local-only (evaluate.py) -------------------------------------------------
+# Not needed on the VM. evaluate.py runs on the local machine, no GPU/NeMo
+# required - just this for its WER-distribution / WER-vs-duration plots.
+matplotlib
+
+# --- Local-only smoke test (try_deberta-v3-base.py) ---------------------------
+# Not needed on the VM (or for fine-tuning at all) - only if you run this
+# standalone script locally.
+# transformers
+# certifi
